@@ -125,14 +125,24 @@ export default {
     variableDefinitions() {
       const allVariableDefinitions = this.clusterClass?.spec?.variables || [];
 
+      // CAPI v1beta2 demotes v1beta1 variable.metadata into
+      // .deprecatedV1Beta1Metadata when the ClusterClass was submitted with
+      // the v1beta1 schema; fall back to that field so section routing keeps
+      // working for both submission paths.
+      const sectionAnnotation = (v) => (
+        v?.metadata?.annotations?.[ANNOTATIONS.SECTION]
+        ?? v?.deprecatedV1Beta1Metadata?.annotations?.[ANNOTATIONS.SECTION]
+        ?? ''
+      ).toLowerCase();
+
       if (!this.isMachineScoped) {
         // variables with annotation matching this section
         if (this.section) {
-          return allVariableDefinitions.filter((v) => (v?.metadata?.annotations?.[ANNOTATIONS.SECTION] || '').toLowerCase() === this.section);
+          return allVariableDefinitions.filter((v) => sectionAnnotation(v) === this.section);
           // if this component doesn't have section prop show all variables without section prop
           // and all variables with a section prop that does not match the list  shown in ClusterConfig (FORM_SECTIONS)
         } else {
-          return allVariableDefinitions.filter((v) => !Object.values(FORM_SECTIONS).includes((v?.metadata?.annotations?.[ANNOTATIONS.SECTION] || '').toLowerCase()) || !v?.metadata?.annotations?.[ANNOTATIONS.SECTION]);
+          return allVariableDefinitions.filter((v) => !Object.values(FORM_SECTIONS).includes(sectionAnnotation(v)) || !sectionAnnotation(v));
         }
       }
       const variableNames = this.machineScopedJsonPatches.reduce((names, patch) => {
@@ -162,7 +172,9 @@ export default {
       const out = { };
 
       this.variableDefinitions.forEach((spec) => {
-        const section = spec?.metadata?.annotations?.[ANNOTATIONS.SECTION] || 'misc';
+        const section = spec?.metadata?.annotations?.[ANNOTATIONS.SECTION]
+          ?? spec?.deprecatedV1Beta1Metadata?.annotations?.[ANNOTATIONS.SECTION]
+          ?? 'misc';
 
         if (!out[section]) {
           out[section] = [spec];

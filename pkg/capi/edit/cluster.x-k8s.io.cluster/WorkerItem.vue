@@ -203,7 +203,10 @@ export default {
         class="box"
       >
         <div class="value row row-wi">
-          <div class="col-long span-5">
+          <div
+            v-if="(classOptions?.length || 0) > 1"
+            class="col-long span-5"
+          >
             <LabeledSelect
               v-model:value="row.value.class"
               :mode="mode"

@@ -376,6 +376,15 @@ export default {
         return (this.rke2Versions?.data || []).map((d) => d.version).reverse();
       }
 
+      // For everything else (managed CP / kubeadm / etc.) admins opt into a
+      // dropdown by adding turtles-capi.cattle.io/version-options to the
+      // ClusterClass with a comma-separated list of allowed versions.
+      const annotated = this.clusterClassObj?.metadata?.annotations?.['turtles-capi.cattle.io/version-options'];
+
+      if (annotated) {
+        return annotated.split(',').map((s) => s.trim()).filter(Boolean);
+      }
+
       return [];
     },
 
