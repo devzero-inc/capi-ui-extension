@@ -365,6 +365,15 @@ export default {
       return MANAGED_CONTROL_PLANE_KINDS.includes(this.clusterClassControlPlane);
     },
 
+    // TTL drives the capi-ttl-sweeper CronJob. Stored as the `ttl` cluster
+    // label in `<n>d` form (e.g. 7d). Form exposes the integer day count.
+    ttlDays() {
+      const raw = this.value?.metadata?.labels?.ttl;
+      const m = typeof raw === 'string' && raw.match(/^(\d+)d$/);
+
+      return m ? parseInt(m[1], 10) : 7;
+    },
+
     // if k3s or rke2 use release channel endpoint to get a list of version choices
     // if this property is [] show a plain text input for cp version
     versionOptions() {
@@ -488,10 +497,15 @@ export default {
       }
       // Always Rancher-auto-import CAPI clusters created from the form so
       // engineers don't have to think about a checkbox or remember the label.
+      // Default TTL to 7 days; engineers can override in the General form
+      // input. Both are stored as cluster labels.
       if (!val.metadata.labels) {
         val.metadata.labels = {};
       }
       val.metadata.labels[LABELS.AUTO_IMPORT] = 'true';
+      if (!val.metadata.labels.ttl) {
+        val.metadata.labels.ttl = '7d';
+      }
       this.$emit('update:value', { k: 'spec', val: val.spec });
 
       if (!reset) {
@@ -543,6 +557,19 @@ export default {
         this.value.metadata.labels['cluster-api.cattle.io/rancher-auto-import'] = 'true';
       } else {
         delete this.value.metadata.labels['cluster-api.cattle.io/rancher-auto-import'];
+      }
+    },
+
+    setTtlDays(val) {
+      const n = parseInt(val, 10);
+
+      if (!this.value.metadata.labels) {
+        this.value.metadata.labels = {};
+      }
+      if (Number.isFinite(n) && n > 0) {
+        this.value.metadata.labels.ttl = `${ n }d`;
+      } else {
+        delete this.value.metadata.labels.ttl;
       }
     },
 
@@ -644,6 +671,17 @@ export default {
                 required
                 :rules="fvGetAndReportPathRules('spec.topology.version')"
                 @update:value="$emit('update:value', { k: 'spec.topology.version', val: $event })"
+              />
+            </div>
+            <div class="col col-half mt-20">
+              <LabeledInput
+                :value="ttlDays"
+                :mode="mode"
+                type="number"
+                min="1"
+                label="TTL (days)"
+                tooltip="Cluster auto-deletes this many days after creation. Stored as the `ttl` label, consumed by the capi-ttl-sweeper."
+                @update:value="setTtlDays"
               />
             </div>
           </div>

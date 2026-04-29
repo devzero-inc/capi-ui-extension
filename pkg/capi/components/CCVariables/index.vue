@@ -151,15 +151,32 @@ export default {
       const variableNames = this.machineScopedJsonPatches.reduce((names, patch) => {
         const valueFromVariable = patch?.valueFrom?.variable;
 
-        if (!valueFromVariable) {
-          return names;
+        if (valueFromVariable) {
+          // the value here could be a field or index of the variable, defined <variable definition.name>.<some field> or <variable definition name>[i]
+          const parsedName = valueFromVariable.split(/\.|\[/)[0];
+
+          if (parsedName !== 'builtin') {
+            names.push(parsedName);
+          }
         }
 
-        // the value here could be a field or index of the variable, defined <variable definition.name>.<some field> or <variable definition name>[i]
-        const parsedName = valueFromVariable.split(/\.|\[/)[0];
+        // CAPI patches can also reference variables inside Go-template
+        // strings via {{ .varName }} (we use templates for things like
+        // os/cpuFamily-driven AMI lookups). Surface those too so per-pool
+        // overrides expose every variable that actually drives the patch.
+        const tpl = patch?.valueFrom?.template;
 
-        if (parsedName !== 'builtin') {
-          names.push(parsedName);
+        if (typeof tpl === 'string') {
+          const re = /\{\{[-\s]*\.([A-Za-z_][A-Za-z0-9_]*)/g;
+          let m;
+
+          while ((m = re.exec(tpl)) !== null) {
+            const tplName = m[1];
+
+            if (tplName !== 'builtin' && !names.includes(tplName)) {
+              names.push(tplName);
+            }
+          }
         }
 
         return names;
@@ -429,7 +446,7 @@ export default {
       </Accordion>
       <div v-else>
         <div
-          :class="{'expandee':expanded}"
+          :class="{'expandee': expanded && isMachineScoped}"
         >
           <div
             v-for="(group, label) in s"
