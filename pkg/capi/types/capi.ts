@@ -31,6 +31,17 @@ export const CAPI = {
   RKE2_CP:       'RKE2ControlPlaneTemplate'
 };
 
+// Managed-control-plane kinds. For these, controlPlaneEndpoint, topology
+// controlPlane.replicas, and clusterNetwork.* are set by the cloud provider
+// (or ignored entirely), so the form hides the Control Plane and Networking
+// sections to avoid confusing engineers with irrelevant fields.
+export const MANAGED_CONTROL_PLANE_KINDS = [
+  'AWSManagedControlPlaneTemplate',
+  'AzureManagedControlPlaneTemplate',
+  'GCPManagedControlPlaneTemplate',
+  'OCIManagedControlPlaneTemplate'
+];
+
 export const CP_VERSIONS = {
   KThreesControlPlaneTemplate:        ['k3s1', 'k3s2'],
   RKE2ControlPlaneTemplate:          ['rke2r1', 'rke2r2']

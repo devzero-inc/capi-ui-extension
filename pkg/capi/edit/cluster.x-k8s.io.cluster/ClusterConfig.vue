@@ -18,7 +18,7 @@ import NetworkSection from './NetworkSection.vue';
 import ControlPlaneEndpointSection from './ControlPlaneEndpointSection.vue';
 import ControlPlaneSection from './ControlPlaneSection.vue';
 import { mapGetters } from 'vuex';
-import { LABELS, CAPI } from '../../types/capi';
+import { LABELS, CAPI, MANAGED_CONTROL_PLANE_KINDS } from '../../types/capi';
 import Loading from '@shell/components/Loading.vue';
 import { NAMESPACE, FLEET } from '@shell/config/types';
 import Accordion from '@components/Accordion/Accordion.vue';
@@ -352,6 +352,13 @@ export default {
       return this.clusterClassControlPlane === CAPI.RKE2_CP;
     },
 
+    // For managed-control-plane infra (EKS / AKS / GKE / OKE) the cloud
+    // provider sets controlPlaneEndpoint, replicas, and the cluster
+    // network — exposing those form fields just confuses engineers.
+    isManagedControlPlane() {
+      return MANAGED_CONTROL_PLANE_KINDS.includes(this.clusterClassControlPlane);
+    },
+
     // if k3s or rke2 use release channel endpoint to get a list of version choices
     // if this property is [] show a plain text input for cp version
     versionOptions() {
@@ -641,6 +648,7 @@ export default {
         </Accordion>
 
         <Accordion
+          v-if="!isManagedControlPlane"
           class="mt-20 section-accordion"
           open-initially
           :title="t(`capi.cluster.section.${formSections.CONTROL_PLANE}`)"
@@ -677,6 +685,7 @@ export default {
         </Accordion>
 
         <Accordion
+          v-if="!isManagedControlPlane"
           class="mt-20"
           open-initially
           :title="t(`capi.cluster.section.${formSections.NETWORKING}`)"
