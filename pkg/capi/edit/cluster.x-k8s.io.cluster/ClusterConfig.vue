@@ -313,7 +313,11 @@ export default {
       return this.clusterClassObj?.spec?.workers?.machinePools?.map((w) => w.class);
     },
     clusterClassControlPlane() {
-      return this.clusterClassObj?.spec?.controlPlane?.ref?.kind;
+      // CAPI v1beta2 renamed `controlPlane.ref` to `controlPlane.templateRef`;
+      // fall back to the new field so detection keeps working on CAPI v1beta2+
+      // ClusterClasses (which is what current Rancher Turtles installs surface).
+      return this.clusterClassObj?.spec?.controlPlane?.ref?.kind
+        ?? this.clusterClassObj?.spec?.controlPlane?.templateRef?.kind;
     },
 
     clusterClassOptions() {
