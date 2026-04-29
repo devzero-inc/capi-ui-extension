@@ -447,9 +447,7 @@ export default {
         </div>
       </Accordion>
       <div v-else>
-        <div
-          :class="{'expandee': expanded && isMachineScoped}"
-        >
+        <div>
           <div
             v-for="(group, label) in s"
             :key="label"
