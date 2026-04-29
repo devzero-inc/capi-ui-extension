@@ -161,13 +161,15 @@ export default {
         }
 
         // CAPI patches can also reference variables inside Go-template
-        // strings via {{ .varName }} (we use templates for things like
-        // os/cpuFamily-driven AMI lookups). Surface those too so per-pool
-        // overrides expose every variable that actually drives the patch.
+        // strings via {{ .varName }} or {{ if eq .varName ... }} etc. We
+        // can't easily parse the full template grammar, so just match any
+        // `.identifier` in the template body and let the downstream filter
+        // (variableNames.includes) drop matches that aren't actual
+        // ClusterClass variables.
         const tpl = patch?.valueFrom?.template;
 
         if (typeof tpl === 'string') {
-          const re = /\{\{[-\s]*\.([A-Za-z_][A-Za-z0-9_]*)/g;
+          const re = /\.([A-Za-z_][A-Za-z0-9_]*)/g;
           let m;
 
           while ((m = re.exec(tpl)) !== null) {

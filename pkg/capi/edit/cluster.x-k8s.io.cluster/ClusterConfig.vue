@@ -673,6 +673,8 @@ export default {
                 @update:value="$emit('update:value', { k: 'spec.topology.version', val: $event })"
               />
             </div>
+          </div>
+          <div class="row mb-20">
             <div class="col col-half mt-20">
               <LabeledInput
                 :value="ttlDays"
