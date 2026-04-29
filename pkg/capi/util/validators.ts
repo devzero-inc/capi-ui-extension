@@ -219,7 +219,12 @@ export const versionValidator = function (
           ? ""
           : t("validation.version");
       }
-      return parsedVersion ? "" : t("validation.version");
+      // EKS / AKS / GKE accept just v<major>.<minor>; semver.parse rejects
+      // those, so accept either a full semver or a v<major>.<minor> shape.
+      if (parsedVersion) {
+        return "";
+      }
+      return /^v\d+\.\d+$/.test(version) ? "" : t("validation.version");
     } catch {
       return t("validation.version");
     }
