@@ -32,6 +32,7 @@ const defaultTopologyConfig = {
 
 export const FORM_SECTIONS = {
   GENERAL:       'general',
+  CONFIGURATION: 'configuration',
   CONTROL_PLANE: 'controlplane',
   NETWORKING:    'networking',
   WORKERS:       'workers',
@@ -137,11 +138,12 @@ export default {
       credential:                null,
       versionInfo:               {},
       variableSectionReady: {
-        general:      true,
-        controlPlane: true,
-        networking:   true,
-        misc:         true,
-        workers:      true
+        general:       true,
+        configuration: true,
+        controlPlane:  true,
+        networking:    true,
+        misc:          true,
+        workers:       true
       },
       clusterClassObj:           null,
       loading:                   true,
@@ -475,6 +477,12 @@ export default {
       if (!val.spec.topology || reset) {
         set(val.spec, 'topology', clone(defaultTopologyConfig));
       }
+      // Always Rancher-auto-import CAPI clusters created from the form so
+      // engineers don't have to think about a checkbox or remember the label.
+      if (!val.metadata.labels) {
+        val.metadata.labels = {};
+      }
+      val.metadata.labels[LABELS.AUTO_IMPORT] = 'true';
       this.$emit('update:value', { k: 'spec', val: val.spec });
 
       if (!reset) {
@@ -605,15 +613,6 @@ export default {
             :rules="{ name: fvGetAndReportPathRules('metadata.name') }"
             @update:value="$emit('update:value', { k: 'metadata', val: $event.metadata })"
           />
-          <div class="mt-30">
-            <Checkbox
-              v-model:value="autoImport"
-              :mode="mode"
-              label-key="capi.cluster.labels.autoimport.label"
-              :disabled="clusterIsAlreadyCreated"
-              @update:value="enableAutoImport"
-            />
-          </div>
           <div class="row mb-20">
             <div class="col col-half mt-20">
               <LabeledSelect
@@ -648,6 +647,22 @@ export default {
 
             @update-variables="setVariables"
             @validation-passed="e => variableSectionReady.general = e"
+          />
+        </Accordion>
+
+        <Accordion
+          class="mt-20 section-accordion"
+          open-initially
+          :title="t(`capi.cluster.section.${formSections.CONFIGURATION}`)"
+        >
+          <ClusterClassVariables
+            :value="variables"
+            :section="formSections.CONFIGURATION"
+            :cluster-class="clusterClassObj"
+            :cluster-namespace="value.metadata?.namespace"
+
+            @update-variables="setVariables"
+            @validation-passed="e => variableSectionReady.configuration = e"
           />
         </Accordion>
 
@@ -772,16 +787,7 @@ export default {
           </div>
         </Accordion>
 
-        <!-- GENERIC VARIABLES -->
 
-        <ClusterClassVariables
-          :value="variables"
-          :cluster-class="clusterClassObj"
-          :cluster-namespace="value.metadata?.namespace"
-          @update-variables="setVariables"
-
-          @validation-passed="e => variableSectionReady.misc = e"
-        />
 
         <Accordion
           class="mt-20 section-accordion"

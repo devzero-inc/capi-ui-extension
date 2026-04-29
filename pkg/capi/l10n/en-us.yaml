@@ -17,6 +17,7 @@ capi:
   cluster:
     section:
       general: General
+      configuration: Configuration
       controlplane: Control Plane
       networking: Networking
       workers: Workers

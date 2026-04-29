@@ -252,19 +252,6 @@ export default {
           </div>
         </div>
 
-        <div
-          v-if="row.value.class"
-          class="machine-variables"
-        >
-          <CCVariables
-            v-model:value="row.value.variables.overrides"
-            :global-variables="globalVariables"
-            :cluster-class="clusterClass"
-            :mode="mode"
-            :machine-class-name="row.value.class"
-            :machine-class-type="machineClassType"
-          />
-        </div>
       </div>
     </template>
     <div
