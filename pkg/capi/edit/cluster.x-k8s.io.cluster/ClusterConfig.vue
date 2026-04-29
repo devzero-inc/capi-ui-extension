@@ -750,15 +750,6 @@ export default {
           :title="t(`capi.cluster.section.${formSections.WORKERS}`)"
         >
           <div class="col span-12 mb-20">
-            <ClusterClassVariables
-              :value="variables"
-              :section="formSections.WORKERS"
-              :cluster-class="clusterClassObj"
-              :cluster-namespace="value.metadata?.namespace"
-
-              @update-variables="setVariables"
-              @validation-passed="e => variableSectionReady.workers = e"
-            />
             <div class="span-12">
               <div
                 v-if="!!machineDeploymentOptions"

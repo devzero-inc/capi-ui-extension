@@ -20,7 +20,7 @@ capi:
       configuration: Configuration
       controlplane: Control Plane
       networking: Networking
-      workers: Workers
+      workers: Node Pools
       labels: Labels and Annotations
     steps:
       clusterClass:
@@ -71,17 +71,17 @@ capi:
       host: Host
       port: Port
     workers:
-      add: Add Worker
-      title: Workers
+      add: Add Node Pool
+      title: Node Pools
       class: Class
       name: Name
       replicas: Replicas
       machineDeployments:
-        title: Machine Deployments
-        add: Add Machine Deployment
+        title: Node Pools
+        add: Add Node Pool
       machinePools:
-        title: Machine Pools
-        add: Add Machine Pool
+        title: Node Pools (MachinePool)
+        add: Add Node Pool
     labels:
       title: Labels &amp; Annotations
       autoimport:

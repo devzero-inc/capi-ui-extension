@@ -255,6 +255,24 @@ export default {
           </div>
         </div>
 
+        <!-- Per-node-pool variables (e.g. os, cpuFamily). Shown inline so
+             engineers configure each pool independently; the underlying CAPI
+             machinery stores these as Cluster.spec.topology.workers
+             .machineDeployments[].variables.overrides. -->
+        <div
+          v-if="row.value.class"
+          class="machine-variables"
+        >
+          <CCVariables
+            v-model:value="row.value.variables.overrides"
+            :global-variables="globalVariables"
+            :cluster-class="clusterClass"
+            :mode="mode"
+            :machine-class-name="row.value.class"
+            :machine-class-type="machineClassType"
+          />
+        </div>
+
       </div>
     </template>
     <div

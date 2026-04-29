@@ -81,7 +81,10 @@ export default {
     return {
       errorCount:  0,
       rerenderKey: randomStr(), // this key is used on the spacer element so it can be forced to re-calculate its visibility when the cluster class changes
-      expanded:    false
+      // Always start expanded — this fork shows per-node-pool variables
+      // inline rather than gated behind a collapsed "Override Variables"
+      // header, so engineers see the os/cpuFamily inputs immediately.
+      expanded:    true
     };
   },
 
@@ -426,20 +429,6 @@ export default {
       </Accordion>
       <div v-else>
         <div
-          v-if="isMachineScoped"
-          :style="{cursor: 'pointer'}"
-          class="expander mt-10"
-          @click="()=>expanded=!expanded"
-        >
-          <h4>
-            <i
-              class="icon text-primary"
-              :class="{'icon-chevron-down': expanded, 'icon-chevron-up':!expanded}"
-            />{{ t('capi.cluster.variables.overrideDefaults') }}
-          </h4>
-        </div>
-        <div
-          v-if="expanded || !isMachineScoped"
           :class="{'expandee':expanded}"
         >
           <div
