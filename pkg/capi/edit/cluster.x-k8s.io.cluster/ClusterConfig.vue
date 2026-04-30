@@ -483,6 +483,24 @@ export default {
       if (this.errors) {
         clear(this.errors);
       }
+
+      // CAPI v1beta2 enforces minItems=1 on machineDeployments and
+      // machinePools when present, so empty default arrays we initialize
+      // the topology with would fail admission. Strip them before save.
+      const workers = this.value?.spec?.topology?.workers;
+
+      if (workers) {
+        if (Array.isArray(workers.machineDeployments) && workers.machineDeployments.length === 0) {
+          delete workers.machineDeployments;
+        }
+        if (Array.isArray(workers.machinePools) && workers.machinePools.length === 0) {
+          delete workers.machinePools;
+        }
+        if (Object.keys(workers).length === 0) {
+          delete this.value.spec.topology.workers;
+        }
+      }
+
       try {
         await this.value.save();
 
