@@ -445,12 +445,17 @@ export default {
 
     async setClass() {
       // if switching cluster classes, re-initialize the cluster object and form
-      if (this.topology.class) {
+      if (this.topology.class || this.topology.classRef?.name) {
         await this.initSpecs(true);
       }
       const clusterClassName = this.clusterClassObj?.metadata?.name;
 
+      // CAPI v1beta2 replaced spec.topology.class (string) with
+      // spec.topology.classRef.name. Set both: the new field is what the
+      // admission webhook validates; the legacy field is harmless and keeps
+      // any v1beta1-only consumer working.
       this.$emit('update:value', { k: 'spec.topology.class', val: clusterClassName });
+      this.$emit('update:value', { k: 'spec.topology.classRef', val: { name: clusterClassName } });
     },
 
     setClassNamespace() {
@@ -459,6 +464,10 @@ export default {
       this.$emit('update:value', { k: 'metadata.namespace', val: clusterClassNs });
       if (this.classNamespaceSupported) {
         this.value.spec.topology.classNamespace = clusterClassNs;
+        // v1beta2 nests namespace inside classRef as well.
+        if (this.value.spec.topology.classRef) {
+          this.value.spec.topology.classRef.namespace = clusterClassNs;
+        }
       }
     },
 
