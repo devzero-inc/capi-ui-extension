@@ -374,6 +374,16 @@ export default {
       return m ? parseInt(m[1], 10) : 7;
     },
 
+    // Default owner label value, sourced from the logged-in user. Cluster
+    // labels accept [a-z0-9_.-], so emails work but we sanitize anything
+    // weirder (e.g. github_user://12345 -> github_user_12345).
+    ownerLabelDefault() {
+      const me = this.$store.getters['auth/principal'];
+      const candidate = me?.loginName || me?.name || me?.id || this.$store.getters['auth/principalId'] || 'unknown';
+
+      return String(candidate).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+    },
+
     // if k3s or rke2 use release channel endpoint to get a list of version choices
     // if this property is [] show a plain text input for cp version
     versionOptions() {
@@ -525,13 +535,18 @@ export default {
       // Always Rancher-auto-import CAPI clusters created from the form so
       // engineers don't have to think about a checkbox or remember the label.
       // Default TTL to 7 days; engineers can override in the General form
-      // input. Both are stored as cluster labels.
+      // input. Owner is required by the cluster-owner-ttl Kyverno policy
+      // and gets auto-filled from the logged-in user's email/principal id
+      // so engineers don't have to type their own email every time.
       if (!val.metadata.labels) {
         val.metadata.labels = {};
       }
       val.metadata.labels[LABELS.AUTO_IMPORT] = 'true';
       if (!val.metadata.labels.ttl) {
         val.metadata.labels.ttl = '7d';
+      }
+      if (!val.metadata.labels.owner) {
+        val.metadata.labels.owner = this.ownerLabelDefault;
       }
       this.$emit('update:value', { k: 'spec', val: val.spec });
 
