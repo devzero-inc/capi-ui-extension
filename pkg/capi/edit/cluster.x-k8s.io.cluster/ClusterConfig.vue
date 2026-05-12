@@ -366,9 +366,16 @@ export default {
     },
 
     // TTL drives the capi-ttl-sweeper CronJob. Stored as the `ttl` cluster
-    // label in `<n>d` form (e.g. 7d). Form exposes the integer day count.
+    // label. Accepts either a number of days (stored as "<n>d") or the
+    // special sentinel "do-not-delete" to exempt the cluster from sweeping.
+    // Returns the display value: a plain number for "<n>d" labels, or the
+    // raw string for "do-not-delete".
     ttlDays() {
       const raw = this.value?.metadata?.labels?.ttl;
+
+      if (raw === 'do-not-delete') {
+        return 'do-not-delete';
+      }
       const m = typeof raw === 'string' && raw.match(/^(\d+)d$/);
 
       return m ? parseInt(m[1], 10) : 7;
@@ -603,11 +610,16 @@ export default {
     },
 
     setTtlDays(val) {
-      const n = parseInt(val, 10);
-
       if (!this.value.metadata.labels) {
         this.value.metadata.labels = {};
       }
+      if (String(val).trim().toLowerCase() === 'do-not-delete') {
+        this.value.metadata.labels.ttl = 'do-not-delete';
+
+        return;
+      }
+      const n = parseInt(val, 10);
+
       if (Number.isFinite(n) && n > 0) {
         this.value.metadata.labels.ttl = `${ n }d`;
       } else {
@@ -721,10 +733,9 @@ export default {
               <LabeledInput
                 :value="ttlDays"
                 :mode="mode"
-                type="number"
-                min="1"
-                label="TTL (days)"
-                tooltip="Cluster auto-deletes this many days after creation. Stored as the `ttl` label, consumed by the capi-ttl-sweeper."
+                label="TTL"
+                placeholder="e.g. 7 (days) or do-not-delete"
+                tooltip="Days until auto-deletion (e.g. 7), or 'do-not-delete' to exempt this cluster from the TTL sweeper. Stored as the 'ttl' label."
                 @update:value="setTtlDays"
               />
             </div>
@@ -856,6 +867,7 @@ export default {
                 <WorkerItem
                   v-model:value="machinePools"
                   :global-variables="variables"
+                  :is-deployments="false"
                   :mode="mode"
                   :title="t('capi.cluster.workers.machinePools.title')"
                   :default-add-value="defaultPoolAddValue"

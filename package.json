@@ -1,7 +1,7 @@
 {
   "name": "capi-ui",
   "description": "UI for CAPI cluster provisioning using the Rancher Turtles extension",
-  "version": "0.8.6-devzero.3",
+  "version": "0.8.6-devzero.4",
   "private": false,
   "engines": {
     "node": ">=20"
