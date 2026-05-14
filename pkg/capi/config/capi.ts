@@ -2,14 +2,92 @@ import { CAPI as RANCHER_CAPI } from '@shell/config/types';
 import { CAPI as TURTLES_CAPI } from '../types/capi';
 const CLUSTER_MGMT_PRODUCT = 'manager';
 
+// Custom column set for the CAPI Cluster list. Rancher's default set leaks
+// the full CAPI status (CP Desired/Current/Ready/Available/Up-to-date, then
+// the same five fields for workers, plus Paused) which is mostly blank
+// noise for managed-control-plane providers (EKS, GKE) where the entire
+// control plane is one external thing — the columns just don't apply.
+//
+// We replace them with two things engineers actually need at a glance:
+// TTL (when will this disappear?) and Owner (who do I bother about it?).
+// Both come straight out of metadata.labels stamped by the create form.
+const CAPI_CLUSTER_HEADERS = [
+  {
+    name:      'state',
+    labelKey:  'tableHeaders.state',
+    sort:      ['stateSort', 'nameSort'],
+    value:     'stateDisplay',
+    width:     100,
+    default:   'unknown',
+    formatter: 'BadgeStateFormatter'
+  },
+  {
+    name:          'name',
+    labelKey:      'tableHeaders.name',
+    value:         'nameDisplay',
+    sort:          ['nameSort'],
+    formatter:     'LinkDetail',
+    canBeVariable: true,
+  },
+  {
+    name:     'clusterClass',
+    label:    'ClusterClass',
+    value:    'spec.topology.class',
+    sort:     ['spec.topology.class'],
+  },
+  {
+    name:     'available',
+    label:    'Available',
+    value:    "status.conditions[?type=='Available'].status | [0]",
+    sort:     ["status.conditions[?type=='Available'].status | [0]"],
+    width:    100,
+  },
+  {
+    name:     'ttl',
+    label:    'TTL',
+    value:    'metadata.labels.ttl',
+    sort:     ['metadata.labels.ttl'],
+    width:    120,
+  },
+  {
+    name:     'owner',
+    label:    'Owner',
+    value:    'metadata.labels.owner',
+    sort:     ['metadata.labels.owner'],
+  },
+  {
+    name:     'phase',
+    label:    'Phase',
+    value:    'status.phase',
+    sort:     ['status.phase'],
+    width:    130,
+  },
+  {
+    name:     'version',
+    label:    'Version',
+    value:    'spec.topology.version',
+    sort:     ['spec.topology.version'],
+  },
+  {
+    name:      'age',
+    labelKey:  'tableHeaders.age',
+    value:     'metadata.creationTimestamp',
+    sort:      'metadata.creationTimestamp:desc',
+    search:    false,
+    formatter: 'LiveDate',
+    width:     75,
+    align:     'right',
+  },
+];
+
 export function init($plugin: any, store: any) {
   const {
     basicType,
     weightType,
     weightGroup,
     virtualType,
-    configureType
-    // headers,
+    configureType,
+    headers,
   } = $plugin.DSL(store, CLUSTER_MGMT_PRODUCT);
 
 
@@ -28,6 +106,7 @@ export function init($plugin: any, store: any) {
   });
 
   configureType(RANCHER_CAPI.CAPI_CLUSTER, {showConfigView: false})
+  headers(RANCHER_CAPI.CAPI_CLUSTER, CAPI_CLUSTER_HEADERS)
 
   // Interestingly, types can only appear in one place, so by adding machine deployment
   // and others here, they will no longer show up in the Advanced section, which is
