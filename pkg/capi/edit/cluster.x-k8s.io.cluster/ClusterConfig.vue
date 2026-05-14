@@ -228,6 +228,16 @@ export default {
       return this.mode === _EDIT;
     },
 
+    // Mode shim for fields that are immutable after cluster creation per
+    // CAPI semantics (or just don't make sense to change post-create):
+    // clusterClass, name, namespace, region, k8s version. Forces `view`
+    // mode in edit so the input renders disabled instead of pretending to
+    // accept a value the API will reject. NameNsDescription handles name
+    // and namespace internally — we use this for everything else.
+    immutableFieldMode() {
+      return this.clusterIsAlreadyCreated ? 'view' : this.mode;
+    },
+
     controlPlane: {
       get() {
         return this.value?.spec?.topology?.controlPlane || {};
@@ -389,9 +399,31 @@ export default {
     // Default owner label value, sourced from the logged-in user. Cluster
     // labels accept [a-z0-9_.-], so emails work but we sanitize anything
     // weirder (e.g. github_user://12345 -> github_user_12345).
+    //
+    // Rancher's auth principal object varies wildly across providers:
+    //   - local users: loginName=email, name=display
+    //   - Google OAuth: loginName=email, name=display, id=googleoauth_user-<sub>
+    //   - GitHub: loginName=github handle, name=display, id=github_user-<num>
+    // When loginName is missing we'd previously fall through to the bare
+    // principal id, producing useless labels like "googleoauth_user-101...".
+    // Try a wider set of email-shaped fields first (the user object from
+    // 'auth/me' has spec.loginName, the principal getter has loginName),
+    // then display name, then principal id as a final fallback.
     ownerLabelDefault() {
-      const me = this.$store.getters['auth/principal'];
-      const candidate = me?.loginName || me?.name || me?.id || this.$store.getters['auth/principalId'] || 'unknown';
+      const principal = this.$store.getters['auth/principal'];
+      const me = this.$store.getters['auth/me'];
+      const candidate =
+        principal?.loginName ||
+        me?.spec?.loginName ||
+        me?.username ||
+        me?.loginName ||
+        principal?.email ||
+        me?.email ||
+        principal?.name ||
+        me?.name ||
+        principal?.id ||
+        this.$store.getters['auth/principalId'] ||
+        'unknown';
 
       return String(candidate).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
     },
@@ -733,7 +765,7 @@ export default {
             <div class="col col-half mt-20">
               <LabeledSelect
                 v-if="versionOptions.length"
-                :mode="mode"
+                :mode="immutableFieldMode"
                 :value="value.spec.topology.version"
                 label-key="cluster.kubernetesVersion.label"
                 required
@@ -746,7 +778,7 @@ export default {
               <LabeledInput
                 v-else
                 v-model:value="value.spec.topology.version"
-                :mode="mode"
+                :mode="immutableFieldMode"
                 label-key="cluster.kubernetesVersion.label"
                 required
                 :rules="fvGetAndReportPathRules('spec.topology.version')"
@@ -785,6 +817,7 @@ export default {
         >
           <ClusterClassVariables
             :value="variables"
+            :mode="immutableFieldMode"
             :section="formSections.CONFIGURATION"
             :cluster-class="clusterClassObj"
             :cluster-namespace="value.metadata?.namespace"

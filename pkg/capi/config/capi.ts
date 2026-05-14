@@ -32,14 +32,18 @@ const CAPI_CLUSTER_HEADERS = [
   {
     name:     'clusterClass',
     label:    'ClusterClass',
-    value:    'spec.topology.class',
-    sort:     ['spec.topology.class'],
+    // Resolved via model getter so we cover both v1beta1
+    // (spec.topology.class) and v1beta2 (spec.topology.classRef.name).
+    value:    'clusterClassName',
+    sort:     ['clusterClassName'],
   },
   {
     name:     'available',
     label:    'Available',
-    value:    "status.conditions[?type=='Available'].status | [0]",
-    sort:     ["status.conditions[?type=='Available'].status | [0]"],
+    // Resolved via model getter — Rancher's SortableTable doesn't support
+    // JMESPath in `value`, only dot paths or model getter names.
+    value:    'availableCondition',
+    sort:     ['availableCondition'],
     width:    100,
   },
   {

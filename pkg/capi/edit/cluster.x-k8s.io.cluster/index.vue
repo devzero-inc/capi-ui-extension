@@ -52,7 +52,13 @@ export default {
     const route = this.$route;
     const subType = route.query[SUB_TYPE] || null;
     const classFromURL = route.query[QUERY_PARAMS.CLASS];
-    const curClass = this.value?.spec?.topology?.class;
+    // v1beta1 stored the class name at spec.topology.class; v1beta2 moved
+    // it under spec.topology.classRef.name. The API server serves whichever
+    // version it's configured for, so we read both. Without this fallback,
+    // edit mode for v1beta2 clusters loses preselectedClass and the form
+    // makes the user re-pick a ClusterClass — which is immutable in CAPI
+    // anyway, so the picker is a dead end.
+    const curClass = this.value?.spec?.topology?.classRef?.name || this.value?.spec?.topology?.class;
     const curNs = this.value?.metadata?.namespace;
     const classFromValue = curNs && curClass ? escape(`${ curNs }/${ curClass }`) : null;
     const preselectedClass = classFromURL || classFromValue || null;
