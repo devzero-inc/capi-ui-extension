@@ -501,7 +501,7 @@ export default {
       this.value.spec.topology.variables.push(...vars);
     },
 
-    async saveOverride() {
+    async saveOverride(buttonDone) {
       if (this.errors) {
         clear(this.errors);
       }
@@ -523,12 +523,19 @@ export default {
         }
       }
 
+      // CruResource hands us a callback so the Save button can re-enable
+      // itself. We must call it on both branches — without buttonDone(false)
+      // on the error path the button stays disabled + spinning forever and
+      // the user has to leave the form to retry. The optional chain keeps
+      // the handler defensive in case the prop is ever wired differently.
       try {
         await this.value.save();
+        buttonDone?.(true);
 
         return this.done();
       } catch (err) {
         this.errors.push(err);
+        buttonDone?.(false);
       }
     },
 
