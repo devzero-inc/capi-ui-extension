@@ -376,9 +376,14 @@ export default {
       if (raw === 'do-not-delete') {
         return 'do-not-delete';
       }
-      const m = typeof raw === 'string' && raw.match(/^(\d+)d$/);
+      // Accept any well-formed Go-style duration ("7d", "8h", "1h30m",
+      // "2d4h", "90s"). The sweeper sums all <number><unit> segments,
+      // so we just pass the raw label through to the input as-is.
+      if (typeof raw === 'string' && /^(\d+[dhms])+$/.test(raw)) {
+        return raw;
+      }
 
-      return m ? parseInt(m[1], 10) : 7;
+      return '7d';
     },
 
     // Default owner label value, sourced from the logged-in user. Cluster
@@ -613,18 +618,32 @@ export default {
       if (!this.value.metadata.labels) {
         this.value.metadata.labels = {};
       }
-      if (String(val).trim().toLowerCase() === 'do-not-delete') {
+      const trimmed = String(val).trim().toLowerCase();
+
+      if (trimmed === 'do-not-delete') {
         this.value.metadata.labels.ttl = 'do-not-delete';
 
         return;
       }
-      const n = parseInt(val, 10);
+      // Accept Go-style compound durations: "7d", "8h", "1h30m", "2d4h30m",
+      // "90s". One or more <number><unit> segments where unit is d/h/m/s.
+      // Sweeper sums them. Bare numbers like "7" are interpreted as days
+      // for backward compatibility with the old days-only input.
+      if (/^(\d+[dhms])+$/.test(trimmed)) {
+        this.value.metadata.labels.ttl = trimmed;
 
-      if (Number.isFinite(n) && n > 0) {
-        this.value.metadata.labels.ttl = `${ n }d`;
-      } else {
-        delete this.value.metadata.labels.ttl;
+        return;
       }
+      const n = parseInt(trimmed, 10);
+
+      if (Number.isFinite(n) && n > 0 && String(n) === trimmed) {
+        this.value.metadata.labels.ttl = `${ n }d`;
+
+        return;
+      }
+      // Invalid input — leave the label alone rather than wiping it. The
+      // input retains the user's text so they can fix it. Sweeper's default
+      // (7d) applies if the label ends up unset on save.
     },
 
     openRepoModal() {
@@ -734,8 +753,8 @@ export default {
                 :value="ttlDays"
                 :mode="mode"
                 label="TTL"
-                placeholder="e.g. 7 (days) or do-not-delete"
-                tooltip="Days until auto-deletion (e.g. 7), or 'do-not-delete' to exempt this cluster from the TTL sweeper. Stored as the 'ttl' label."
+                placeholder="e.g. 7d, 8h, 1h30m, or do-not-delete"
+                tooltip="Time until auto-deletion, Go-style duration: 7d, 8h, 30m, 90s, or compound like 1h30m / 2d4h. Use 'do-not-delete' to exempt this cluster from the TTL sweeper. Stored as the 'ttl' label; you can edit it later from this same form to extend."
                 @update:value="setTtlDays"
               />
             </div>
