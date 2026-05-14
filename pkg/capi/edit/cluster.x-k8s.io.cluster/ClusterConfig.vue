@@ -800,7 +800,15 @@ export default {
       </CardGrid>
     </template>
     <template #stepConfiguration>
-      <div :key="topology.class">
+      <!-- Keying the wrapper on the class name forces a teardown when the
+           user picks a different class in the create-mode picker. For
+           v1beta2 clusters topology.class is undefined (the class lives at
+           classRef.name) so without a fallback the key flips from undefined
+           → string mid-mount when setClass emits its initial update, which
+           tears down NameNsDescription / the version field / TTL on every
+           edit-mode mount. Fall back to classRef.name so the key is stable
+           from first render. -->
+      <div :key="topology.classRef?.name || topology.class || 'no-class'">
         <Accordion
           class="mt-20 section-accordion"
           open-initially
