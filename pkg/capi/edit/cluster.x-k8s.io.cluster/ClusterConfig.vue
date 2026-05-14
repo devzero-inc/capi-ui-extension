@@ -230,6 +230,18 @@ export default {
     },
 
     stepConfigurationRequires() {
+      // In edit mode the cluster already passed CAPI's admission webhook,
+      // so re-running the client-side gate is mostly punishment — it trips
+      // when an enum value got renamed in the ClusterClass after the
+      // cluster was created, when a locked-in-view-mode field reports
+      // validation-passed=false, or just when CCVariables hasn't finished
+      // its first validation pass on mount. The save call itself still
+      // goes through the webhook, and saveOverride now correctly re-enables
+      // the button on error, so engineers retain a real failure path.
+      if (this.clusterIsAlreadyCreated) {
+        return true;
+      }
+
       const workersValid = ((this.value?.spec?.topology?.workers?.machinePools && this.value?.spec?.topology?.workers?.machinePools.length > 0) ||
          (this.value?.spec?.topology?.workers?.machineDeployments && this.value?.spec?.topology?.workers?.machineDeployments.length > 0)) &&
          this.machineDeploymentsValid && this.machinePoolsValid;
