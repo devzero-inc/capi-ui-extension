@@ -389,9 +389,31 @@ export default {
     // Default owner label value, sourced from the logged-in user. Cluster
     // labels accept [a-z0-9_.-], so emails work but we sanitize anything
     // weirder (e.g. github_user://12345 -> github_user_12345).
+    //
+    // Rancher's auth principal object varies wildly across providers:
+    //   - local users: loginName=email, name=display
+    //   - Google OAuth: loginName=email, name=display, id=googleoauth_user-<sub>
+    //   - GitHub: loginName=github handle, name=display, id=github_user-<num>
+    // When loginName is missing we'd previously fall through to the bare
+    // principal id, producing useless labels like "googleoauth_user-101...".
+    // Try a wider set of email-shaped fields first (the user object from
+    // 'auth/me' has spec.loginName, the principal getter has loginName),
+    // then display name, then principal id as a final fallback.
     ownerLabelDefault() {
-      const me = this.$store.getters['auth/principal'];
-      const candidate = me?.loginName || me?.name || me?.id || this.$store.getters['auth/principalId'] || 'unknown';
+      const principal = this.$store.getters['auth/principal'];
+      const me = this.$store.getters['auth/me'];
+      const candidate =
+        principal?.loginName ||
+        me?.spec?.loginName ||
+        me?.username ||
+        me?.loginName ||
+        principal?.email ||
+        me?.email ||
+        principal?.name ||
+        me?.name ||
+        principal?.id ||
+        this.$store.getters['auth/principalId'] ||
+        'unknown';
 
       return String(candidate).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
     },

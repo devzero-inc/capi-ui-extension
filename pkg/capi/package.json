@@ -1,7 +1,7 @@
 {
   "name": "capi",
   "description": "UI for CAPI cluster provisioning",
-  "version": "0.8.6-devzero.7",
+  "version": "0.8.6-devzero.8",
   "private": false,
   "rancher": {
     "annotations": {
