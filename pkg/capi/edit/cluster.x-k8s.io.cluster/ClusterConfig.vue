@@ -179,10 +179,20 @@ export default {
       }
     },
 
-    stepConfigurationRequires(neu) {
-      const step = this.addSteps.find((s) => s.name === 'stepConfiguration');
+    stepConfigurationRequires: {
+      // immediate so the initial true value in edit mode propagates to
+      // step.ready without waiting for a change. Vue watchers don't fire on
+      // initial render by default, so step.ready was stuck at its data()
+      // default (false) and CruResource left the Save button disabled even
+      // though stepConfigurationRequires returned true.
+      immediate: true,
+      handler(neu) {
+        const step = this.addSteps.find((s) => s.name === 'stepConfiguration');
 
-      step.ready = !!neu;
+        if (step) {
+          step.ready = !!neu;
+        }
+      }
     },
   },
 
