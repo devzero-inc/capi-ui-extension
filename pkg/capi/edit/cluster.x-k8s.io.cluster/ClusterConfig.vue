@@ -9,6 +9,7 @@ import LabeledSelect from '@shell/components/form/LabeledSelect';
 import CreateEditView from '@shell/mixins/create-edit-view';
 import Labels from '@shell/components/form/Labels.vue';
 import { _EDIT } from '@shell/config/query-params';
+import { MANAGEMENT } from '@shell/config/types';
 import ClusterClassVariables from '../../components/CCVariables/index.vue';
 import { versionValidator, hostValidator, portValidator, cidrValidator } from '../../util/validators';
 import Checkbox from '@components/Form/Checkbox/Checkbox.vue';
@@ -80,10 +81,17 @@ export default {
   },
 
   beforeMount() {
-    this.initSpecs().then(() => {
-    }).catch((err) => {
-      this.errors.push(err);
-      this.loading = false;
+    // Look up the v3 User CR for the logged-in principal so we can store a
+    // human-readable display name in the `owner` label rather than the raw
+    // OAuth subject ID (e.g. "Radostin Stoyanov" instead of
+    // "googleoauth_user-101475580257776198815"). Result is awaited before
+    // initSpecs so the owner default falls through to the display name.
+    this.loadCurrentUser().finally(() => {
+      this.initSpecs().then(() => {
+      }).catch((err) => {
+        this.errors.push(err);
+        this.loading = false;
+      });
     });
 
     this.$store.dispatch('management/request', { url: '/v1-k3s-release/releases' }).then((res) => {
@@ -123,6 +131,10 @@ export default {
 
     return {
       addSteps,
+      // Display name from the v3 User CR matching the logged-in principal.
+      // Populated by loadCurrentUser before initSpecs runs so the owner
+      // label gets a human name, not the raw OAuth subject id.
+      currentUserDisplayName: null,
       fvFormRuleSets: [
         { path: 'metadata.name', rules: ['required'] },
         { path: 'spec.topology.version', rules: ['required', 'version'] },
@@ -397,30 +409,19 @@ export default {
     },
 
     // Default owner label value, sourced from the logged-in user. Cluster
-    // labels accept [a-z0-9_.-], so emails work but we sanitize anything
-    // weirder (e.g. github_user://12345 -> github_user_12345).
+    // labels accept [a-z0-9_.-], so emails / display names work after we
+    // sanitize anything weirder (e.g. github_user://12345 -> github_user_12345).
     //
-    // Rancher's auth principal object varies wildly across providers:
-    //   - local users: loginName=email, name=display
-    //   - Google OAuth: loginName=email, name=display, id=googleoauth_user-<sub>
-    //   - GitHub: loginName=github handle, name=display, id=github_user-<num>
-    // When loginName is missing we'd previously fall through to the bare
-    // principal id, producing useless labels like "googleoauth_user-101...".
-    // Try a wider set of email-shaped fields first (the user object from
-    // 'auth/me' has spec.loginName, the principal getter has loginName),
-    // then display name, then principal id as a final fallback.
+    // For Google OAuth users the principal object only carries the raw
+    // subject ID — Rancher's User CR is the only place the human display
+    // name lives. loadCurrentUser populates currentUserDisplayName before
+    // initSpecs runs so this falls through to it.
     ownerLabelDefault() {
       const principal = this.$store.getters['auth/principal'];
-      const me = this.$store.getters['auth/me'];
       const candidate =
         principal?.loginName ||
-        me?.spec?.loginName ||
-        me?.username ||
-        me?.loginName ||
-        principal?.email ||
-        me?.email ||
+        this.currentUserDisplayName ||
         principal?.name ||
-        me?.name ||
         principal?.id ||
         this.$store.getters['auth/principalId'] ||
         'unknown';
@@ -483,6 +484,40 @@ export default {
   methods: {
     set,
 
+    // Resolve the v3 User CR matching the logged-in principal so we can
+    // surface displayName as the default owner label. Rancher's auth
+    // principal carries only the OAuth subject id for some providers
+    // (Google), so without this lookup the owner label ends up looking
+    // like "googleoauth_user-101475...". User principalIds use "://" as
+    // the type/subject separator while auth/principalId uses "-" — try
+    // both shapes when matching. Permission-denied (non-admin viewers)
+    // is fine; we just leave currentUserDisplayName null and fall
+    // through to the principal id.
+    async loadCurrentUser() {
+      const principalId = this.$store.getters['auth/principalId'];
+
+      if (!principalId) {
+        return;
+      }
+      // "googleoauth_user-101..." → "googleoauth_user://101..."
+      const colonForm = principalId.replace(/_(user|group)-/, '_$1://');
+
+      try {
+        const users = await this.$store.dispatch('management/findAll', { type: MANAGEMENT.USER });
+        const me = users.find((u) => {
+          const ids = u.principalIds || [];
+
+          return ids.includes(principalId) || ids.includes(colonForm);
+        });
+
+        if (me?.displayName) {
+          this.currentUserDisplayName = me.displayName;
+        }
+      } catch (e) {
+        // Non-admin users can't list management.cattle.io.user; that's fine.
+      }
+    },
+
     setClassInfo(name) {
       this.clusterClassObj = this.clusterClasses.find((x) => {
         const split = unescape(name).split('/');
@@ -497,12 +532,20 @@ export default {
       }
     },
 
-    async setClass() {
-      // if switching cluster classes, re-initialize the cluster object and form
-      if (this.topology.class || this.topology.classRef?.name) {
+    async setClass({ resetTopology = false } = {}) {
+      const clusterClassName = this.clusterClassObj?.metadata?.name;
+
+      // Only blow away the existing topology when the user explicitly picks a
+      // different class in the create-mode picker. Calling initSpecs(true)
+      // unconditionally — as the previous code did when topology.class was
+      // truthy — wiped variables, version, workers and labels on every edit
+      // mount, because edit-mode clusters always already have a class set.
+      const currentClass = this.topology.classRef?.name || this.topology.class;
+      const switchingClass = currentClass && currentClass !== clusterClassName;
+
+      if (resetTopology || switchingClass) {
         await this.initSpecs(true);
       }
-      const clusterClassName = this.clusterClassObj?.metadata?.name;
 
       // CAPI v1beta2 replaced spec.topology.class (string) with
       // spec.topology.classRef.name. Set both: the new field is what the
@@ -642,7 +685,11 @@ export default {
 
     clickedType(obj) {
       this.clusterClassObj = this.clusterClasses.find((x) => x.id === obj.id) || null;
-      this.setClass();
+      // User actively clicked a class in the create-mode picker — reset any
+      // half-filled topology state. setClassInfo callers from initSpecs
+      // don't pass resetTopology, so edit-mode mount preserves existing
+      // variables / workers / version.
+      this.setClass({ resetTopology: true });
       this.setClassNamespace();
     },
     enableAutoImport(val) {
