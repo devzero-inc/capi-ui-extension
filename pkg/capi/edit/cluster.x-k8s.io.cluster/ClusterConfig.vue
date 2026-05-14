@@ -40,6 +40,32 @@ export const FORM_SECTIONS = {
   LABELS:        'labels'
 };
 
+// Mapping of nodeType / machineType variable values to the canonical
+// instance/machine type that the ClusterClass patches resolve to. The
+// spot-placement-scores ConfigMap is keyed by these canonical names, so
+// the UI panel needs the same mapping to look up scores. Keep in sync
+// with the patch templates in cluster-templates-aws-eks.tf and
+// cluster-templates-gcp.tf — when an enum entry changes there, the
+// matching key here has to move too.
+const NODE_TYPE_TO_INSTANCE = {
+  // AWS EKS — nodeType variable
+  'graviton2 (ARM64, $60/mo)':       'm6g.large',
+  'graviton3 (ARM64, $60/mo)':       'm7g.large',
+  'graviton4 (ARM64, $70/mo)':       'm8g.large',
+  'icelake (AMD64, $70/mo)':         'm6i.large',
+  'sapphire-rapids (AMD64, $80/mo)': 'm7i.large',
+  'granite-rapids (AMD64, $80/mo)':  'm8i.large',
+  'epyc (AMD64, $80/mo)':            'm7a.large',
+  't4 (1× T4, $390/mo)':             'g4dn.xlarge',
+  'v100 (1× V100, $2.3k/mo)':        'p3.2xlarge',
+  'l4 (1× L4, $600/mo)':             'g6.xlarge',
+  'l40s (1× L40S, $1.4k/mo)':        'g6e.xlarge',
+  'a10g (1× A10G, $800/mo)':         'g5.xlarge',
+  'a100 (8× A100 40GB, $24k/mo)':    'p4d.24xlarge',
+  'a100-80 (8× A100 80GB, $30k/mo)': 'p4de.24xlarge',
+  'h100 (8× H100, $72k/mo)':         'p5.48xlarge',
+};
+
 export default {
   name:       'ClusterConfig',
   components: {
@@ -81,6 +107,11 @@ export default {
   },
 
   beforeMount() {
+    // Spot scores are independent of initSpecs — fire and forget; the panel
+    // hides itself while spotScoreData is null and pops in once the cache
+    // resolves. No need to delay the form on the ConfigMap fetch.
+    this.loadSpotScores();
+
     // Look up the v3 User CR for the logged-in principal so we can store a
     // human-readable display name in the `owner` label rather than the raw
     // OAuth subject ID (e.g. "Radostin Stoyanov" instead of
@@ -135,6 +166,11 @@ export default {
       // Populated by loadCurrentUser before initSpecs runs so the owner
       // label gets a human name, not the raw OAuth subject id.
       currentUserDisplayName: null,
+      // { region, updatedAt, scores: { "g4dn.xlarge": 1, "m7g.large": 3, ... } }
+      // Populated by loadSpotScores from the capi-ttl-sweeper/spot-placement-scores
+      // ConfigMap maintained by the spot-score-cache CronJob in the mgmt cluster.
+      // null until the fetch resolves; UI treats null as "no data, hide panel".
+      spotScoreData: null,
       fvFormRuleSets: [
         { path: 'metadata.name', rules: ['required'] },
         { path: 'spec.topology.version', rules: ['required', 'version'] },
@@ -260,6 +296,69 @@ export default {
     },
     clusterIsAlreadyCreated() {
       return this.mode === _EDIT;
+    },
+
+    // List of rows for the Spot Capacity panel — one row per worker pool /
+    // deployment. Each row pairs the pool's effective nodeType pick with the
+    // canonical instance type and the latest spot-placement score from the
+    // ConfigMap. Returns [] when scores aren't loaded yet or aren't relevant
+    // (e.g. all pools picked CPU types we don't have scores for); the
+    // template gates the panel on length > 0.
+    //
+    // Score buckets follow AWS's documented Spot Placement Score
+    // scale (1-10, higher is better):
+    //   8-10 → green ("strong")
+    //   4-7  → yellow ("moderate")
+    //   1-3  → red ("tight, expect spot-pending delays")
+    //   missing → grey, with the message "no data" (cron hasn't run yet or
+    //             AWS returned no score, often the case for SKUs being
+    //             phased out like p3.2xlarge / V100)
+    spotCapacityRows() {
+      const scores = this.spotScoreData?.scores;
+
+      if (!scores) {
+        return [];
+      }
+      const globalNodeType = (this.value?.spec?.topology?.variables || []).find((v) => v.name === 'nodeType' || v.name === 'machineType');
+      const allPools = [
+        ...(this.value?.spec?.topology?.workers?.machinePools || []),
+        ...(this.value?.spec?.topology?.workers?.machineDeployments || []),
+      ];
+
+      return allPools.map((pool) => {
+        const override = (pool.variables?.overrides || []).find((o) => o.name === 'nodeType' || o.name === 'machineType');
+        const nodeType = override?.value || globalNodeType?.value || '';
+        const instance = NODE_TYPE_TO_INSTANCE[nodeType] || (nodeType.split(' ')[0]);
+        const score = scores[instance];
+        let color = 'grey';
+        let label = 'no data';
+
+        if (typeof score === 'number') {
+          if (score >= 8) {
+            color = 'green';
+            label = 'strong';
+          } else if (score >= 4) {
+            color = 'yellow';
+            label = 'moderate';
+          } else {
+            color = 'red';
+            label = 'tight';
+          }
+        }
+
+        return {
+          name:    pool.name || pool.class,
+          nodeType,
+          instance,
+          score:   typeof score === 'number' ? score : null,
+          color,
+          label,
+        };
+      });
+    },
+
+    spotCapacityUpdatedAt() {
+      return this.spotScoreData?.updatedAt;
     },
 
     // Mode shim for fields that are immutable after cluster creation per
@@ -505,6 +604,32 @@ export default {
 
   methods: {
     set,
+
+    // Fetch the spot-placement-scores ConfigMap and parse its scores.json
+    // payload. The CronJob in capi-ttl-sweeper writes one entry per
+    // instance type. Missing keys mean no spot capacity data is available
+    // for that type (e.g. p3.2xlarge / V100 has been returning empty in
+    // us-west-2 — AWS effectively has no spot to offer there).
+    //
+    // Permission-denied (e.g. a downstream cluster's Rancher proxy stripping
+    // mgmt-cluster access) is fine: leave spotScoreData null and the panel
+    // simply doesn't render.
+    async loadSpotScores() {
+      try {
+        const cm = await this.$store.dispatch('management/find', {
+          type: 'configmap',
+          id:   'capi-ttl-sweeper/spot-placement-scores',
+        });
+        const raw = cm?.data?.['scores.json'];
+
+        if (!raw) {
+          return;
+        }
+        this.spotScoreData = JSON.parse(raw);
+      } catch (e) {
+        // No access, no ConfigMap, malformed JSON — quietly skip the panel.
+      }
+    },
 
     // Resolve the v3 User CR matching the logged-in principal so we can
     // surface displayName as the default owner label. Rancher's auth
@@ -1015,6 +1140,42 @@ export default {
               </div>
             </div>
           </div>
+
+          <!-- Spot capacity indicator. Hidden when no scores or no pools.
+               One row per pool, with a colored dot summarising the
+               AWS Spot Placement Score for that pool's instance type. -->
+          <div
+            v-if="spotCapacityRows.length"
+            class="spot-capacity-panel mt-20"
+          >
+            <div class="spot-capacity-header">
+              <strong>Spot capacity</strong>
+              <span
+                v-if="spotCapacityUpdatedAt"
+                class="spot-capacity-updated"
+              >
+                updated {{ spotCapacityUpdatedAt }}
+              </span>
+            </div>
+            <table class="spot-capacity-table">
+              <tr
+                v-for="row in spotCapacityRows"
+                :key="row.name + row.instance"
+              >
+                <td class="spot-capacity-pool">
+                  {{ row.name }}
+                </td>
+                <td class="spot-capacity-instance">
+                  {{ row.instance }}
+                </td>
+                <td class="spot-capacity-score">
+                  <span :class="['spot-dot', `spot-dot-${row.color}`]" />
+                  {{ row.score === null ? '—' : `${ row.score }/10` }}
+                  <span class="spot-capacity-label">{{ row.label }}</span>
+                </td>
+              </tr>
+            </table>
+          </div>
         </Accordion>
 
 
@@ -1039,6 +1200,64 @@ export default {
 .version {
     width: 65%
 }
+
+.spot-capacity-panel {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px 16px;
+  background: var(--body-bg);
+}
+
+.spot-capacity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.spot-capacity-updated {
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+.spot-capacity-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  td {
+    padding: 4px 12px 4px 0;
+    vertical-align: middle;
+  }
+}
+
+.spot-capacity-pool {
+  font-weight: 500;
+}
+
+.spot-capacity-instance {
+  color: var(--muted);
+  font-family: monospace;
+}
+
+.spot-capacity-label {
+  color: var(--muted);
+  margin-left: 6px;
+  font-size: 0.9em;
+}
+
+.spot-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.spot-dot-green  { background-color: #4caf50; }
+.spot-dot-yellow { background-color: #f0c419; }
+.spot-dot-red    { background-color: #e53935; }
+.spot-dot-grey   { background-color: #9e9e9e; }
 
 //custom width for input columns instead of the usual classes (span-*) to simplify variable sizing
 :deep(.col-half)  {
