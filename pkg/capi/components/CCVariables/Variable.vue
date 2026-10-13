@@ -317,6 +317,14 @@ export default {
         } catch (err) {
           // the yamleditor component will show an error icon if the user has entered invalid yaml + focuses away
         }
+      } else if (['integer', 'number'].includes(this.schema?.type) && typeof e === 'string' && e.trim() !== '') {
+        // Numeric inputs emit strings. Preserve the schema's JSON type for
+        // cluster variables and machine-pool overrides without truncating decimals.
+        const numericValue = Number(e);
+
+        if (Number.isFinite(numericValue)) {
+          out = numericValue;
+        }
       }
       if (this.isToggle) {
         // open the info highlight when toggle switch is enabled

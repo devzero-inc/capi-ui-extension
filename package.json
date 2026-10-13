@@ -24,6 +24,7 @@
     "glob": "7.2.3"
   },
   "scripts": {
+    "test:variable-values": "node --test tests/variable-values.test.cjs",
     "dev": "NODE_ENV=dev ./node_modules/.bin/vue-cli-service serve",
     "build": "./node_modules/.bin/vue-cli-service build",
     "clean": "./node_modules/@rancher/shell/scripts/clean",
