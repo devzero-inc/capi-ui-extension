@@ -3298,7 +3298,7 @@
   resolved "https://registry.npmjs.org/@popperjs/core/-/core-2.11.8.tgz#6b79032e760a0899cd4204710beede972a3a185f"
   integrity sha512-P1st0aksCrn9sGZhp8GMYwBnQsbvAWsZAX44oXNNvLHGqAOcoVxmjZiohstwQ7SqKnbR47akdNi+uleWD8+g6A==
 
-"@rancher/components@^0.3.0-alpha.1":
+"@rancher/components@0.3.0-alpha.1":
   version "0.3.0-alpha.1"
   resolved "https://registry.yarnpkg.com/@rancher/components/-/components-0.3.0-alpha.1.tgz#86f570be89f84ab271bd3ca392b7bc57827e33c1"
   integrity sha512-wqplnnHD4RUY1KO1zl9IZ8pZvVfY2MhgRWHsNaqAd17Y0Chylk9egsFveRJb0VBPOCwa3iu0ttFvl9mLIjvpHw==
@@ -14761,9 +14761,9 @@ webpack@5, webpack@^5.54.0:
     webpack-sources "^3.2.3"
 
 websocket-driver@>=0.5.1, websocket-driver@^0.7.4:
-  version "0.7.4"
-  resolved "https://registry.yarnpkg.com/websocket-driver/-/websocket-driver-0.7.4.tgz#89ad5295bbf64b480abcba31e4953aca706f5760"
-  integrity sha512-b17KeDIQVjvb0ssuSDF2cYXSg2iztliJ4B9WdsuB6J952qCPKmnVq4DyW5motImXHDC1cBT/1UezrJVsKw5zjg==
+  version "0.7.5"
+  resolved "https://registry.yarnpkg.com/websocket-driver/-/websocket-driver-0.7.5.tgz#569d22764ab21f2de20af0e74b411e8ae5a0fa46"
+  integrity sha512-ZL2+3c7kMBdIRCMz6l8jQMHyGVxj+UL+xVk74Ombiciboca8rHa15L86B19E5oh1pL9Ii/uj54gtsIrZGMo6zA==
   dependencies:
     http-parser-js ">=0.5.1"
     safe-buffer ">=5.1.0"
